@@ -7,7 +7,7 @@
     name="description"
     content="NICE ENDURO — мотосалон в Кунгуре: продажа мотоциклов, сервис и кастом."
   />
-  <title>NICE ENDURO</title>
+  <title>NICE ENDURO | Мотосалон</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
@@ -194,6 +194,33 @@
       <p id="authStatus" class="auth-status">Вы не авторизованы</p>
     </div>
   </div>
+
+  <button id="chatToggleBtn" class="chat-toggle" type="button" aria-label="Открыть чат">
+    Чат
+    <span id="chatUnreadBadge" class="chat-badge hidden-block">0</span>
+  </button>
+
+  <section id="chatPanel" class="chat-panel hidden-block" aria-label="Чат с поддержкой">
+    <header class="chat-header">
+      <div>
+        <strong>Чат с менеджером</strong>
+        <p id="chatSubTitle">Онлайн поддержка NICE ENDURO</p>
+      </div>
+      <button id="chatCloseBtn" class="modal-close" type="button" aria-label="Закрыть">×</button>
+    </header>
+
+    <div id="chatThreadsWrap" class="chat-threads hidden-block">
+      <div class="chat-threads-title">Диалоги</div>
+      <div id="chatThreadsList"></div>
+    </div>
+
+    <div id="chatMessages" class="chat-messages"></div>
+    <div id="chatTyping" class="chat-typing hidden-block">Администратор печатает...</div>
+    <form id="chatForm" class="chat-form">
+      <input id="chatInput" type="text" placeholder="Введите сообщение..." maxlength="500" />
+      <button class="btn btn-primary" type="submit">Отправить</button>
+    </form>
+  </section>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>

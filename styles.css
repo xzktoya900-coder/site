@@ -525,12 +525,176 @@ p {
 
 .auth-modal-card {
   width: min(760px, 94vw);
+  border-color: rgba(255, 210, 31, 0.2);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+.auth-modal-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(255, 210, 31, 0.08), transparent 36%),
+    radial-gradient(circle at 90% 100%, rgba(80, 130, 255, 0.08), transparent 42%);
 }
 
 .auth-modal-actions {
   margin-top: 10px;
   display: flex;
   justify-content: flex-end;
+}
+
+.auth-grid .admin-form {
+  background: linear-gradient(180deg, rgba(20, 28, 42, 0.92), rgba(11, 17, 27, 0.92));
+}
+
+.auth-grid .admin-form h3 {
+  margin-bottom: 6px;
+}
+
+.auth-grid .admin-form input {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.auth-grid .admin-form input:focus {
+  outline: none;
+  border-color: rgba(255, 210, 31, 0.55);
+  box-shadow: 0 0 0 3px rgba(255, 210, 31, 0.12);
+}
+
+.chat-toggle {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 90;
+  border: 1px solid rgba(255, 210, 31, 0.45);
+  background: linear-gradient(130deg, #1b2231, #101522);
+  color: #f6fbff;
+  padding: 12px 16px;
+  border-radius: 999px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chat-badge {
+  margin-left: 8px;
+  background: #ff4f6b;
+  color: #fff;
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-size: 0.72rem;
+}
+
+.chat-panel {
+  position: fixed;
+  right: 20px;
+  bottom: 74px;
+  width: min(420px, 94vw);
+  height: min(620px, 78vh);
+  z-index: 95;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #131a28, #0c111b);
+  display: grid;
+  grid-template-rows: auto auto 1fr auto auto;
+  overflow: hidden;
+}
+
+.chat-header {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.chat-header p {
+  margin-top: 4px;
+  font-size: 0.82rem;
+}
+
+.chat-threads {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 10px 12px;
+  max-height: 170px;
+  overflow: auto;
+}
+
+.chat-threads-title {
+  font-size: 0.8rem;
+  color: #afc1e2;
+  margin-bottom: 8px;
+}
+
+.chat-thread-item {
+  width: 100%;
+  text-align: left;
+  background: #182133;
+  color: #dce8ff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  cursor: pointer;
+}
+
+.chat-thread-item.active {
+  border-color: rgba(255, 210, 31, 0.5);
+}
+
+.chat-messages {
+  padding: 12px;
+  overflow: auto;
+  display: grid;
+  gap: 8px;
+}
+
+.chat-msg {
+  max-width: 82%;
+  padding: 9px 11px;
+  border-radius: 12px;
+  font-size: 0.93rem;
+}
+
+.chat-msg.user {
+  margin-left: auto;
+  background: #203050;
+  color: #e7f0ff;
+}
+
+.chat-msg.admin {
+  background: #1a202e;
+  color: #f2f6ff;
+}
+
+.chat-msg-meta {
+  margin-top: 4px;
+  font-size: 0.72rem;
+  color: #9eb0d1;
+}
+
+.chat-typing {
+  padding: 0 12px 8px;
+  color: #9db2d8;
+  font-size: 0.8rem;
+}
+
+.chat-form {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  padding: 10px;
+}
+
+.chat-form input {
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  background: #101827;
+  color: #f0f6ff;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
 }
 
 .site-footer {
@@ -609,6 +773,10 @@ p {
   .catalog-grid,
   .admin-grid {
     grid-template-columns: 1fr;
+  }
+
+  .auth-modal-card {
+    width: min(560px, 95vw);
   }
 
   .hero-visual {

@@ -28,6 +28,7 @@ const SESSION_KEY = "nice-enduro-session";
 const BLOCKED_IPS_KEY = "nice-enduro-blocked-ips";
 const DEVICE_IP_KEY = "nice-enduro-device-ip";
 const CLOUD_ROW_ID = 1;
+const CHAT_MESSAGES_KEY = "nice-enduro-chat-messages";
 
 const SUPABASE_URL = window.NICE_ENDURO_SUPABASE_URL || "";
 const SUPABASE_ANON_KEY = window.NICE_ENDURO_SUPABASE_ANON_KEY || "";
@@ -50,6 +51,7 @@ let editIndex = null;
 let currentUser = null;
 let cloudSyncTimer = null;
 let isCloudSyncing = false;
+let ipRefreshPromise = null;
 
 const catalogGrid = document.querySelector("#catalogGrid");
 const adminList = document.querySelector("#adminList");
@@ -91,6 +93,21 @@ const modalTitle = document.querySelector("#modalTitle");
 const modalPrice = document.querySelector("#modalPrice");
 const modalDescription = document.querySelector("#modalDescription");
 const modalFeatures = document.querySelector("#modalFeatures");
+const chatToggleBtn = document.querySelector("#chatToggleBtn");
+const chatUnreadBadge = document.querySelector("#chatUnreadBadge");
+const chatPanel = document.querySelector("#chatPanel");
+const chatCloseBtn = document.querySelector("#chatCloseBtn");
+const chatThreadsWrap = document.querySelector("#chatThreadsWrap");
+const chatThreadsList = document.querySelector("#chatThreadsList");
+const chatMessagesEl = document.querySelector("#chatMessages");
+const chatForm = document.querySelector("#chatForm");
+const chatInput = document.querySelector("#chatInput");
+const chatSubTitle = document.querySelector("#chatSubTitle");
+const chatTyping = document.querySelector("#chatTyping");
+
+let chatMessages = [];
+let chatActiveThread = null;
+let chatPollTimer = null;
 
 const saveCatalog = () => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(catalogItems));
@@ -209,6 +226,200 @@ const resolveClientIp = async () => {
   } catch {
     return getClientIpTag();
   }
+};
+
+const refreshClientIpInBackground = () => {
+  if (ipRefreshPromise) {
+    return ipRefreshPromise;
+  }
+  ipRefreshPromise = resolveClientIp()
+    .catch(() => getClientIpTag())
+    .finally(() => {
+      ipRefreshPromise = null;
+    });
+  return ipRefreshPromise;
+};
+
+const getClientIpFast = () => {
+  const ip = getClientIpTag();
+  refreshClientIpInBackground();
+  return ip;
+};
+
+const loadLocalChatMessages = () => {
+  try {
+    const stored = localStorage.getItem(CHAT_MESSAGES_KEY);
+    const parsed = stored ? JSON.parse(stored) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveLocalChatMessages = (messages) => {
+  localStorage.setItem(CHAT_MESSAGES_KEY, JSON.stringify(messages));
+};
+
+const currentThreadForUser = () => (currentUser ? `user:${currentUser.username}` : null);
+
+const fetchChatMessages = async () => {
+  if (!supabaseClient) {
+    chatMessages = loadLocalChatMessages();
+    return;
+  }
+  const { data, error } = await supabaseClient
+    .from("chat_messages")
+    .select("id, thread, sender, sender_role, message, created_at")
+    .order("created_at", { ascending: true })
+    .limit(500);
+  if (error) {
+    chatMessages = loadLocalChatMessages();
+    return;
+  }
+  chatMessages = (data || []).map((row) => ({
+    id: row.id,
+    thread: row.thread,
+    sender: row.sender,
+    senderRole: row.sender_role,
+    message: row.message,
+    createdAt: row.created_at,
+  }));
+  saveLocalChatMessages(chatMessages);
+};
+
+const sendChatMessage = async (text) => {
+  if (!currentUser) {
+    return;
+  }
+  const thread = isAdmin() ? chatActiveThread : currentThreadForUser();
+  if (!thread) {
+    return;
+  }
+  const payload = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    thread,
+    sender: currentUser.username,
+    senderRole: currentUser.role,
+    message: text,
+    createdAt: new Date().toISOString(),
+  };
+  chatMessages.push(payload);
+  saveLocalChatMessages(chatMessages);
+  if (supabaseClient) {
+    await supabaseClient.from("chat_messages").insert({
+      id: payload.id,
+      thread: payload.thread,
+      sender: payload.sender,
+      sender_role: payload.senderRole,
+      message: payload.message,
+      created_at: payload.createdAt,
+    });
+  }
+};
+
+const formatChatTime = (iso) => {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+};
+
+const renderChatThreads = () => {
+  if (!chatThreadsList) {
+    return;
+  }
+  if (!isAdmin()) {
+    chatThreadsList.innerHTML = "";
+    return;
+  }
+  const threadMap = new Map();
+  chatMessages.forEach((msg) => {
+    threadMap.set(msg.thread, msg);
+  });
+  const threads = Array.from(threadMap.keys()).sort();
+  if (threads.length === 0) {
+    chatThreadsList.innerHTML = '<div class="admin-empty">Пока нет диалогов.</div>';
+    return;
+  }
+  chatThreadsList.innerHTML = threads
+    .map((thread) => {
+      const label = thread.replace("user:", "");
+      const active = thread === chatActiveThread ? "active" : "";
+      return `<button type="button" class="chat-thread-item ${active}" data-thread="${thread}">${label}</button>`;
+    })
+    .join("");
+};
+
+const renderChatMessages = () => {
+  if (!chatMessagesEl) {
+    return;
+  }
+  if (!currentUser) {
+    chatMessagesEl.innerHTML = '<div class="admin-empty">Войдите, чтобы пользоваться чатом.</div>';
+    return;
+  }
+  const thread = isAdmin() ? chatActiveThread : currentThreadForUser();
+  if (!thread) {
+    chatMessagesEl.innerHTML = '<div class="admin-empty">Выберите диалог.</div>';
+    return;
+  }
+  const list = chatMessages.filter((msg) => msg.thread === thread);
+  if (list.length === 0) {
+    chatMessagesEl.innerHTML = '<div class="admin-empty">Напишите первое сообщение.</div>';
+    return;
+  }
+  chatMessagesEl.innerHTML = list
+    .map((msg) => {
+      const roleClass = msg.senderRole === "admin" ? "admin" : "user";
+      return `
+      <div class="chat-msg ${roleClass}">
+        <div>${msg.message}</div>
+        <div class="chat-msg-meta">${msg.sender} • ${formatChatTime(msg.createdAt)}</div>
+      </div>`;
+    })
+    .join("");
+  chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+};
+
+const getUnreadCount = () => {
+  if (!currentUser) {
+    return 0;
+  }
+  if (isAdmin()) {
+    return chatMessages.filter((msg) => msg.senderRole === "user").length;
+  }
+  const thread = currentThreadForUser();
+  return chatMessages.filter((msg) => msg.thread === thread && msg.senderRole === "admin").length;
+};
+
+const renderChatUi = () => {
+  if (chatThreadsWrap) {
+    chatThreadsWrap.classList.toggle("hidden-block", !isAdmin());
+  }
+  if (chatSubTitle) {
+    chatSubTitle.textContent = currentUser
+      ? isAdmin()
+        ? "Режим администратора"
+        : `Вы: ${currentUser.username}`
+      : "Войдите, чтобы написать сообщение";
+  }
+  renderChatThreads();
+  renderChatMessages();
+  const unread = getUnreadCount();
+  if (chatUnreadBadge) {
+    chatUnreadBadge.textContent = String(unread);
+    chatUnreadBadge.classList.toggle("hidden-block", unread <= 0);
+  }
+};
+
+const refreshChat = async () => {
+  await fetchChatMessages();
+  if (isAdmin() && !chatActiveThread) {
+    const firstThread = chatMessages.find((msg) => msg.thread.startsWith("user:"));
+    chatActiveThread = firstThread ? firstThread.thread : null;
+  }
+  if (!isAdmin()) {
+    chatActiveThread = currentThreadForUser();
+  }
+  renderChatUi();
 };
 
 const ensureDefaultAdmin = () => {
@@ -381,6 +592,7 @@ const updateAuthUI = () => {
     authStatus.textContent = currentUser
       ? `Вы вошли: ${currentUser.username} (${currentUser.role})`
       : "Вы не авторизованы";
+    authStatus.style.color = currentUser ? "#8fe7b6" : "#c3d0e8";
   }
   if (authMenuLink) {
     authMenuLink.textContent = currentUser ? "Аккаунт" : "Вход";
@@ -405,6 +617,7 @@ const updateAuthUI = () => {
   }
   renderAdminList();
   renderUsersAdmin();
+  renderChatUi();
 };
 
 if (catalogForm && itemCategory && itemTitle && itemPrice && itemDescription && itemFeatures) {
@@ -598,10 +811,10 @@ if (usersList) {
 }
 
 if (loginForm && loginName && loginPassword) {
-  loginForm.addEventListener("submit", async (event) => {
+  loginForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const users = getUsers();
-    const clientIp = await resolveClientIp();
+    const clientIp = getClientIpFast();
     if (getBlockedIps().includes(clientIp)) {
       if (authStatus) {
         authStatus.textContent = `Вход с IP ${clientIp} заблокирован`;
@@ -614,12 +827,14 @@ if (loginForm && loginName && loginPassword) {
     if (!found) {
       if (authStatus) {
         authStatus.textContent = "Ошибка входа: неверный логин или пароль";
+        authStatus.style.color = "#ff9cac";
       }
       return;
     }
     if (found.blocked) {
       if (authStatus) {
         authStatus.textContent = "Пользователь заблокирован администратором";
+        authStatus.style.color = "#ff9cac";
       }
       return;
     }
@@ -629,13 +844,14 @@ if (loginForm && loginName && loginPassword) {
     setSession(found.username);
     loginForm.reset();
     updateAuthUI();
+    refreshChat();
   });
 }
 
 if (registerForm && registerName && registerPassword) {
-  registerForm.addEventListener("submit", async (event) => {
+  registerForm.addEventListener("submit", (event) => {
     event.preventDefault();
-    const clientIp = await resolveClientIp();
+    const clientIp = getClientIpFast();
     if (getBlockedIps().includes(clientIp)) {
       if (authStatus) {
         authStatus.textContent = `Регистрация с IP ${clientIp} заблокирована`;
@@ -647,6 +863,7 @@ if (registerForm && registerName && registerPassword) {
     if (username.length < 3 || password.length < 4) {
       if (authStatus) {
         authStatus.textContent = "Логин от 3 символов, пароль от 4 символов";
+        authStatus.style.color = "#ff9cac";
       }
       return;
     }
@@ -654,6 +871,7 @@ if (registerForm && registerName && registerPassword) {
     if (users.some((user) => user.username.toLowerCase() === username.toLowerCase())) {
       if (authStatus) {
         authStatus.textContent = "Пользователь с таким логином уже существует";
+        authStatus.style.color = "#ff9cac";
       }
       return;
     }
@@ -662,6 +880,7 @@ if (registerForm && registerName && registerPassword) {
     registerForm.reset();
     if (authStatus) {
       authStatus.textContent = "Регистрация успешна. Теперь войдите.";
+      authStatus.style.color = "#8fe7b6";
     }
     renderUsersAdmin();
   });
@@ -672,6 +891,7 @@ if (logoutBtn) {
     currentUser = null;
     clearSession();
     updateAuthUI();
+    refreshChat();
   });
 }
 
@@ -752,10 +972,21 @@ if (importDataBtn && importDataInput) {
 
 const initApp = async () => {
   ensureDefaultAdmin();
-  await pullCloudState();
+  await Promise.race([
+    pullCloudState(),
+    new Promise((resolve) => setTimeout(resolve, 1200)),
+  ]);
+  refreshClientIpInBackground();
   restoreSession();
   renderCatalog();
   updateAuthUI();
+  await refreshChat();
+  if (chatPollTimer) {
+    clearInterval(chatPollTimer);
+  }
+  chatPollTimer = setInterval(() => {
+    refreshChat();
+  }, 5000);
 };
 
 initApp();
@@ -821,6 +1052,61 @@ if (authMenuLink) {
 }
 if (closeAuthModalBtn) {
   closeAuthModalBtn.addEventListener("click", closeAuthModal);
+}
+if (chatToggleBtn) {
+  chatToggleBtn.addEventListener("click", () => {
+    if (chatPanel) {
+      chatPanel.classList.toggle("hidden-block");
+    }
+    if (chatPanel && !chatPanel.classList.contains("hidden-block")) {
+      refreshChat();
+    }
+  });
+}
+if (chatCloseBtn) {
+  chatCloseBtn.addEventListener("click", () => {
+    if (chatPanel) {
+      chatPanel.classList.add("hidden-block");
+    }
+  });
+}
+if (chatThreadsList) {
+  chatThreadsList.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLButtonElement)) {
+      return;
+    }
+    const thread = target.dataset.thread;
+    if (!thread || !isAdmin()) {
+      return;
+    }
+    chatActiveThread = thread;
+    renderChatUi();
+  });
+}
+if (chatForm && chatInput) {
+  chatForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const text = chatInput.value.trim();
+    if (!text) {
+      return;
+    }
+    if (!currentUser) {
+      if (chatSubTitle) {
+        chatSubTitle.textContent = "Сначала войдите в аккаунт";
+      }
+      return;
+    }
+    await sendChatMessage(text);
+    chatInput.value = "";
+    if (!isAdmin() && chatTyping) {
+      chatTyping.classList.remove("hidden-block");
+      setTimeout(() => {
+        chatTyping.classList.add("hidden-block");
+      }, 1200);
+    }
+    await refreshChat();
+  });
 }
 
 if (productModal) {
