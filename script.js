@@ -109,6 +109,8 @@ const chatTyping = document.querySelector("#chatTyping");
 let chatMessages = [];
 let chatActiveThread = null;
 let chatPollTimer = null;
+let cloudPullTimer = null;
+let lastCloudUpdatedAt = null;
 
 const saveCatalog = () => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(catalogItems));
@@ -230,7 +232,28 @@ const applyCloudStateSafely = (cloudState) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(catalogItems));
     localStorage.setItem(USERS_KEY, JSON.stringify(cloudUsers));
     localStorage.setItem(BLOCKED_IPS_KEY, JSON.stringify(cloudBlockedIps));
+    lastCloudUpdatedAt = cloudState.updated_at || lastCloudUpdatedAt;
   }
+};
+
+const pullAndApplyCloudState = async ({ forceRender = false } = {}) => {
+  if (!supabaseClient) {
+    return;
+  }
+  const cloudState = await pullCloudState();
+  if (!cloudState) {
+    return;
+  }
+  const nextUpdatedAt = cloudState.updated_at || null;
+  if (!forceRender && lastCloudUpdatedAt && nextUpdatedAt && nextUpdatedAt === lastCloudUpdatedAt) {
+    return;
+  }
+  applyCloudStateSafely(cloudState);
+  if (nextUpdatedAt) {
+    lastCloudUpdatedAt = nextUpdatedAt;
+  }
+  renderCatalog();
+  updateAuthUI();
 };
 
 const getClientIpTag = () => {
@@ -1038,7 +1061,7 @@ const initApp = async () => {
   ensureDefaultAdmin();
   const cloudState = await Promise.race([
     pullCloudState(),
-    new Promise((resolve) => setTimeout(() => resolve(null), 1200)),
+    new Promise((resolve) => setTimeout(() => resolve(null), 450)),
   ]);
   applyCloudStateSafely(cloudState);
   refreshClientIpInBackground();
@@ -1052,6 +1075,12 @@ const initApp = async () => {
   chatPollTimer = setInterval(() => {
     refreshChat();
   }, 5000);
+  if (cloudPullTimer) {
+    clearInterval(cloudPullTimer);
+  }
+  cloudPullTimer = setInterval(() => {
+    pullAndApplyCloudState().catch(() => {});
+  }, 2500);
 };
 
 initApp();
@@ -1212,11 +1241,56 @@ revealElements.forEach((el) => observer.observe(el));
 const menuBtn = document.querySelector(".menu-btn");
 const nav = document.querySelector(".main-nav");
 if (menuBtn && nav) {
+  const closeMobileMenu = () => {
+    nav.classList.remove("open");
+    menuBtn.setAttribute("aria-expanded", "false");
+    menuBtn.setAttribute("aria-label", "Открыть меню");
+    menuBtn.textContent = "☰";
+    document.body.style.overflow = "";
+  };
+  const openMobileMenu = () => {
+    nav.classList.add("open");
+    menuBtn.setAttribute("aria-expanded", "true");
+    menuBtn.setAttribute("aria-label", "Закрыть меню");
+    menuBtn.textContent = "✕";
+    document.body.style.overflow = "hidden";
+  };
   menuBtn.addEventListener("click", () => {
-    nav.classList.toggle("open");
+    if (nav.classList.contains("open")) {
+      closeMobileMenu();
+      return;
+    }
+    openMobileMenu();
   });
 
   nav.querySelectorAll("a").forEach((link) => {
-    link.addEventListener("click", () => nav.classList.remove("open"));
+    link.addEventListener("click", closeMobileMenu);
+  });
+
+  document.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+    if (!nav.classList.contains("open")) {
+      return;
+    }
+    if (target.closest(".main-nav") || target.closest(".menu-btn")) {
+      return;
+    }
+    closeMobileMenu();
+  });
+
+  window.addEventListener("resize", () => {
+    if (window.innerWidth > 980) {
+      closeMobileMenu();
+    }
   });
 }
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    pullAndApplyCloudState().catch(() => {});
+    refreshChat();
+  }
+});

@@ -27,14 +27,22 @@
         </span>
       </a>
 
-      <nav class="main-nav">
+      <nav id="mainNav" class="main-nav" aria-label="Основная навигация">
         <a id="authMenuLink" href="#">Вход</a>
         <a href="#catalog">Модели</a>
         <a id="adminMenuLink" class="hidden-block" href="#admin">Панель</a>
         <a id="adminUsersMenuLink" class="hidden-block" href="#admin">Права</a>
         <a href="#contacts">Контакты</a>
       </nav>
-      <button class="menu-btn" aria-label="Открыть меню">☰</button>
+      <button
+        class="menu-btn"
+        type="button"
+        aria-label="Открыть меню"
+        aria-expanded="false"
+        aria-controls="mainNav"
+      >
+        ☰
+      </button>
     </div>
   </header>
 
