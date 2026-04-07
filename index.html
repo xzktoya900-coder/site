@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta
+    name="description"
+    content="NICE ENDURO — мотосалон в Кунгуре: продажа мотоциклов, сервис и кастом."
+  />
+  <title>NICE ENDURO | Мотосалон</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Unbounded:wght@500;700&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <a class="logo" href="#hero">
+        <span class="logo-mark">N</span>
+        <span class="logo-text">
+          <strong class="brand-yellow">NICE ENDURO</strong>
+          <small>Мотосалон</small>
+        </span>
+      </a>
+
+      <nav class="main-nav">
+        <a id="authMenuLink" href="#">Вход</a>
+        <a href="#catalog">Модели</a>
+        <a id="adminMenuLink" class="hidden-block" href="#admin">Панель</a>
+        <a id="adminUsersMenuLink" class="hidden-block" href="#admin">Права</a>
+        <a href="#contacts">Контакты</a>
+      </nav>
+      <button class="menu-btn" aria-label="Открыть меню">☰</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="hero" class="hero section">
+      <div class="container hero-grid">
+        <div class="hero-copy reveal">
+          <p class="eyebrow">NICE ENDURO</p>
+          <h1>
+            Официальный дилер
+            <span>эндуро, питбайков и квадроциклов</span>
+          </h1>
+          <p>
+            Подбираем технику под цели, опыт и бюджет. Есть сервис, доставка по
+            России и всё необходимое для обслуживания мото-техники.
+          </p>
+          <ul class="hero-points">
+            <li>Помощь в выборе техники</li>
+            <li>Свой сервисный центр</li>
+            <li>Доставка в любой регион РФ</li>
+          </ul>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#catalog">Выбрать мотоцикл</a>
+            <a class="btn btn-outline" href="#admin">Управлять каталогом</a>
+          </div>
+        </div>
+        <div class="hero-visual reveal">
+          <article class="bike-card featured">
+            <p class="chip">В наличии</p>
+            <h3>Эндуро / Питбайки / Квадроциклы</h3>
+            <p>Новые поставки, гарантия, сервис и подбор под задачи</p>
+            <strong>+7 (995) 4-808-808</strong>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="catalog" class="section">
+      <div class="container">
+        <div class="section-head reveal">
+          <p class="eyebrow">Каталог</p>
+          <h2>Каталог техники NICE ENDURO</h2>
+        </div>
+        <div id="catalogGrid" class="catalog-grid"></div>
+      </div>
+    </section>
+
+    <section id="admin" class="section hidden-block">
+      <div class="container">
+        <div class="section-head reveal">
+          <p class="eyebrow">Панель</p>
+          <h2>Управление товарами</h2>
+        </div>
+        <p id="adminGuard" class="auth-status">Войдите как администратор для доступа к панели.</p>
+        <div class="admin-grid reveal">
+          <form id="catalogForm" class="admin-form">
+            <h3 id="adminFormTitle">Добавить товар</h3>
+            <label class="admin-field">
+              <span>Категория</span>
+              <input id="itemCategory" type="text" placeholder="Например: Эндуро" required />
+            </label>
+            <label class="admin-field">
+              <span>Название товара</span>
+              <input id="itemTitle" type="text" placeholder="Например: KAYO T2 300" required />
+            </label>
+            <label class="admin-field">
+              <span>Цена</span>
+              <input id="itemPrice" type="text" placeholder="Например: 219 000 ₽" required />
+            </label>
+            <label class="admin-field">
+              <span>Описание</span>
+              <input id="itemDescription" type="text" placeholder="Краткое описание для карточки" required />
+            </label>
+            <label class="admin-field">
+              <span>Характеристики</span>
+              <input id="itemFeatures" type="text" placeholder="Через запятую: клиренс, подвеска, проходимость" required />
+            </label>
+            <div class="admin-actions">
+              <button class="btn btn-primary" id="saveItemBtn" type="submit">Добавить</button>
+              <button class="btn btn-outline" id="cancelEditBtn" type="button">Отмена</button>
+            </div>
+          </form>
+          <div id="adminList" class="admin-list"></div>
+        </div>
+        <div id="usersAdminBox" class="admin-form reveal">
+          <h3>Права пользователей</h3>
+          <div id="usersList"></div>
+          <div class="admin-actions">
+            <button id="exportDataBtn" class="btn btn-outline" type="button">Экспорт данных</button>
+            <button id="importDataBtn" class="btn btn-outline" type="button">Импорт данных</button>
+            <input id="importDataInput" type="file" accept="application/json" hidden />
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer id="contacts" class="site-footer">
+    <div class="container footer-wrap">
+      <div class="footer-info">
+        <p>© 2026 NICE ENDURO.</p>
+        <p>Адрес: Пермский край, г. Кунгур, ул. Ст.Разина 48</p>
+          <p>Телефон: +7 (995) 4-808-808</p>
+        <p>Пн-Пт: 10:00-19:00 | Сб: 10:00-18:00 | Вт: 10:00-17:00</p>
+      </div>
+      <a href="#hero">Наверх ↑</a>
+    </div>
+  </footer>
+
+  <div id="productModal" class="modal-overlay" hidden>
+    <div class="modal-card">
+      <button id="closeModalBtn" class="modal-close" type="button" aria-label="Закрыть">×</button>
+      <p id="modalCategory" class="eyebrow"></p>
+      <h3 id="modalTitle"></h3>
+      <p id="modalPrice" class="modal-price"></p>
+      <p id="modalDescription"></p>
+      <ul id="modalFeatures" class="modal-features"></ul>
+      <p class="modal-contact">Связаться: +7 (995) 4-808-808</p>
+      <button id="closeModalBtnBottom" class="btn btn-outline modal-bottom-close" type="button">Закрыть</button>
+    </div>
+  </div>
+
+  <div id="authModal" class="modal-overlay" hidden>
+    <div class="modal-card auth-modal-card">
+      <button id="closeAuthModalBtn" class="modal-close" type="button" aria-label="Закрыть">×</button>
+      <h3>Аккаунт NICE ENDURO</h3>
+      <div class="auth-grid">
+        <form id="loginForm" class="admin-form">
+          <h3>Вход</h3>
+          <label class="admin-field">
+            <span>Логин</span>
+            <input id="loginName" type="text" required />
+          </label>
+          <label class="admin-field">
+            <span>Пароль</span>
+            <input id="loginPassword" type="password" required />
+          </label>
+          <button class="btn btn-primary" type="submit">Войти</button>
+        </form>
+        <form id="registerForm" class="admin-form">
+          <h3>Регистрация</h3>
+          <label class="admin-field">
+            <span>Логин</span>
+            <input id="registerName" type="text" required />
+          </label>
+          <label class="admin-field">
+            <span>Пароль</span>
+            <input id="registerPassword" type="password" required />
+          </label>
+          <button class="btn btn-outline" type="submit">Создать аккаунт</button>
+        </form>
+      </div>
+      <div class="auth-modal-actions">
+        <button id="logoutBtn" class="btn btn-outline" type="button">Выйти</button>
+      </div>
+      <p id="authStatus" class="auth-status">Вы не авторизованы</p>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
