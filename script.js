@@ -51,6 +51,7 @@ let editIndex = null;
 let currentUser = null;
 let cloudSyncTimer = null;
 let isCloudSyncing = false;
+let cloudSyncQueued = false;
 let ipRefreshPromise = null;
 
 const catalogGrid = document.querySelector("#catalogGrid");
@@ -146,30 +147,25 @@ const saveBlockedIps = (ips) => {
 
 const pullCloudState = async () => {
   if (!supabaseClient) {
-    return;
+    return null;
   }
   const { data, error } = await supabaseClient
     .from("site_state")
-    .select("catalog, users, blocked_ips")
+    .select("catalog, users, blocked_ips, updated_at")
     .eq("id", CLOUD_ROW_ID)
     .maybeSingle();
   if (error || !data) {
-    return;
+    return null;
   }
-  if (Array.isArray(data.catalog)) {
-    catalogItems = data.catalog.map(normalizeItem).filter(Boolean);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(catalogItems));
-  }
-  if (Array.isArray(data.users)) {
-    localStorage.setItem(USERS_KEY, JSON.stringify(data.users));
-  }
-  if (Array.isArray(data.blocked_ips)) {
-    localStorage.setItem(BLOCKED_IPS_KEY, JSON.stringify(data.blocked_ips));
-  }
+  return data;
 };
 
 const pushCloudState = async () => {
-  if (!supabaseClient || isCloudSyncing) {
+  if (!supabaseClient) {
+    return;
+  }
+  if (isCloudSyncing) {
+    cloudSyncQueued = true;
     return;
   }
   isCloudSyncing = true;
@@ -185,6 +181,10 @@ const pushCloudState = async () => {
     );
   } finally {
     isCloudSyncing = false;
+    if (cloudSyncQueued) {
+      cloudSyncQueued = false;
+      pushCloudState();
+    }
   }
 };
 
@@ -196,9 +196,42 @@ function scheduleCloudSync() {
     clearTimeout(cloudSyncTimer);
   }
   cloudSyncTimer = setTimeout(() => {
-    pushCloudState();
+    pushCloudState().catch(() => {});
   }, 400);
 }
+
+const applyCloudStateSafely = (cloudState) => {
+  if (!cloudState) {
+    return;
+  }
+  const cloudCatalog = Array.isArray(cloudState.catalog)
+    ? cloudState.catalog.map(normalizeItem).filter(Boolean)
+    : [];
+  const cloudUsers = Array.isArray(cloudState.users) ? cloudState.users : [];
+  const cloudBlockedIps = Array.isArray(cloudState.blocked_ips) ? cloudState.blocked_ips : [];
+
+  const localCatalogRaw = loadCatalog();
+  const localCatalog = localCatalogRaw.map(normalizeItem).filter(Boolean);
+  const localUsers = getUsers();
+  const localIps = getBlockedIps();
+
+  const hasLocalData = localCatalog.length > 0 || localUsers.length > 0 || localIps.length > 0;
+  const hasCloudData = cloudCatalog.length > 0 || cloudUsers.length > 0 || cloudBlockedIps.length > 0;
+
+  // Prevent accidental wipe: if cloud is empty but local has data, keep local and sync up.
+  if (!hasCloudData && hasLocalData) {
+    catalogItems = localCatalog;
+    scheduleCloudSync();
+    return;
+  }
+
+  if (hasCloudData) {
+    catalogItems = cloudCatalog;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(catalogItems));
+    localStorage.setItem(USERS_KEY, JSON.stringify(cloudUsers));
+    localStorage.setItem(BLOCKED_IPS_KEY, JSON.stringify(cloudBlockedIps));
+  }
+};
 
 const getClientIpTag = () => {
   const existing = localStorage.getItem(DEVICE_IP_KEY);
@@ -244,6 +277,22 @@ const getClientIpFast = () => {
   const ip = getClientIpTag();
   refreshClientIpInBackground();
   return ip;
+};
+
+const setAuthStatus = (text, tone = "neutral") => {
+  if (!authStatus) {
+    return;
+  }
+  authStatus.textContent = text;
+  if (tone === "error") {
+    authStatus.style.color = "#ff9cac";
+    return;
+  }
+  if (tone === "success") {
+    authStatus.style.color = "#8fe7b6";
+    return;
+  }
+  authStatus.style.color = "#c3d0e8";
 };
 
 const loadLocalChatMessages = () => {
@@ -306,14 +355,18 @@ const sendChatMessage = async (text) => {
   chatMessages.push(payload);
   saveLocalChatMessages(chatMessages);
   if (supabaseClient) {
-    await supabaseClient.from("chat_messages").insert({
-      id: payload.id,
-      thread: payload.thread,
-      sender: payload.sender,
-      sender_role: payload.senderRole,
-      message: payload.message,
-      created_at: payload.createdAt,
-    });
+    try {
+      await supabaseClient.from("chat_messages").insert({
+        id: payload.id,
+        thread: payload.thread,
+        sender: payload.sender,
+        sender_role: payload.senderRole,
+        message: payload.message,
+        created_at: payload.createdAt,
+      });
+    } catch {
+      // Keep message locally if cloud insert fails.
+    }
   }
 };
 
@@ -588,12 +641,10 @@ const renderUsersAdmin = () => {
 };
 
 const updateAuthUI = () => {
-  if (authStatus) {
-    authStatus.textContent = currentUser
-      ? `Вы вошли: ${currentUser.username} (${currentUser.role})`
-      : "Вы не авторизованы";
-    authStatus.style.color = currentUser ? "#8fe7b6" : "#c3d0e8";
-  }
+  setAuthStatus(
+    currentUser ? `Вы вошли: ${currentUser.username} (${currentUser.role})` : "Вы не авторизованы",
+    currentUser ? "success" : "neutral"
+  );
   if (authMenuLink) {
     authMenuLink.textContent = currentUser ? "Аккаунт" : "Вход";
   }
@@ -813,11 +864,16 @@ if (usersList) {
 if (loginForm && loginName && loginPassword) {
   loginForm.addEventListener("submit", (event) => {
     event.preventDefault();
+    const submitButton = loginForm.querySelector('button[type="submit"]');
+    if (submitButton instanceof HTMLButtonElement) {
+      submitButton.disabled = true;
+    }
     const users = getUsers();
     const clientIp = getClientIpFast();
     if (getBlockedIps().includes(clientIp)) {
-      if (authStatus) {
-        authStatus.textContent = `Вход с IP ${clientIp} заблокирован`;
+      setAuthStatus(`Вход с IP ${clientIp} заблокирован`, "error");
+      if (submitButton instanceof HTMLButtonElement) {
+        submitButton.disabled = false;
       }
       return;
     }
@@ -825,16 +881,16 @@ if (loginForm && loginName && loginPassword) {
     const password = loginPassword.value;
     const found = users.find((user) => user.username === username && user.password === password);
     if (!found) {
-      if (authStatus) {
-        authStatus.textContent = "Ошибка входа: неверный логин или пароль";
-        authStatus.style.color = "#ff9cac";
+      setAuthStatus("Ошибка входа: неверный логин или пароль", "error");
+      if (submitButton instanceof HTMLButtonElement) {
+        submitButton.disabled = false;
       }
       return;
     }
     if (found.blocked) {
-      if (authStatus) {
-        authStatus.textContent = "Пользователь заблокирован администратором";
-        authStatus.style.color = "#ff9cac";
+      setAuthStatus("Пользователь заблокирован администратором", "error");
+      if (submitButton instanceof HTMLButtonElement) {
+        submitButton.disabled = false;
       }
       return;
     }
@@ -845,44 +901,52 @@ if (loginForm && loginName && loginPassword) {
     loginForm.reset();
     updateAuthUI();
     refreshChat();
+    if (submitButton instanceof HTMLButtonElement) {
+      submitButton.disabled = false;
+    }
   });
 }
 
 if (registerForm && registerName && registerPassword) {
   registerForm.addEventListener("submit", (event) => {
     event.preventDefault();
+    const submitButton = registerForm.querySelector('button[type="submit"]');
+    if (submitButton instanceof HTMLButtonElement) {
+      submitButton.disabled = true;
+    }
     const clientIp = getClientIpFast();
     if (getBlockedIps().includes(clientIp)) {
-      if (authStatus) {
-        authStatus.textContent = `Регистрация с IP ${clientIp} заблокирована`;
+      setAuthStatus(`Регистрация с IP ${clientIp} заблокирована`, "error");
+      if (submitButton instanceof HTMLButtonElement) {
+        submitButton.disabled = false;
       }
       return;
     }
     const username = registerName.value.trim();
     const password = registerPassword.value;
     if (username.length < 3 || password.length < 4) {
-      if (authStatus) {
-        authStatus.textContent = "Логин от 3 символов, пароль от 4 символов";
-        authStatus.style.color = "#ff9cac";
+      setAuthStatus("Логин от 3 символов, пароль от 4 символов", "error");
+      if (submitButton instanceof HTMLButtonElement) {
+        submitButton.disabled = false;
       }
       return;
     }
     const users = getUsers();
     if (users.some((user) => user.username.toLowerCase() === username.toLowerCase())) {
-      if (authStatus) {
-        authStatus.textContent = "Пользователь с таким логином уже существует";
-        authStatus.style.color = "#ff9cac";
+      setAuthStatus("Пользователь с таким логином уже существует", "error");
+      if (submitButton instanceof HTMLButtonElement) {
+        submitButton.disabled = false;
       }
       return;
     }
     users.push({ username, password, role: "user", blocked: false, lastIp: clientIp });
     saveUsers(users);
     registerForm.reset();
-    if (authStatus) {
-      authStatus.textContent = "Регистрация успешна. Теперь войдите.";
-      authStatus.style.color = "#8fe7b6";
-    }
+    setAuthStatus("Регистрация успешна. Теперь войдите.", "success");
     renderUsersAdmin();
+    if (submitButton instanceof HTMLButtonElement) {
+      submitButton.disabled = false;
+    }
   });
 }
 
@@ -972,10 +1036,11 @@ if (importDataBtn && importDataInput) {
 
 const initApp = async () => {
   ensureDefaultAdmin();
-  await Promise.race([
+  const cloudState = await Promise.race([
     pullCloudState(),
-    new Promise((resolve) => setTimeout(resolve, 1200)),
+    new Promise((resolve) => setTimeout(() => resolve(null), 1200)),
   ]);
+  applyCloudStateSafely(cloudState);
   refreshClientIpInBackground();
   restoreSession();
   renderCatalog();
